@@ -28,18 +28,18 @@ class trader(ABC):
     
     def update_pnl(self, direction, bid_or_ask, true_value):
         if direction == 1:
-             self.pnl += true_value - bid_or_ask
+             self.pnl.append(true_value - bid_or_ask)
         elif dir == -1:
-            self.pnl += bid_or_ask - true_value
+            self.pnl.append(bid_or_ask - true_value)
         else:
-            pass
+            self.pnl.append(0)
 
 class uninformed_trader(trader):
 
     def __init__(self, trade_prob):
         assert trade_prob <= 0.5, "sell and buy prob are equal so therefore must ne smaller than 0.5"
         self.eta = trade_prob
-        self.pnl = 0
+        self.pnl = []
 
     def trade(self):
         ## does not know true value (no use of true value here)
@@ -50,7 +50,7 @@ class noisy_informed_trader(trader):
 
     def __init__(self, sigma_noise):
         self.sigma_noise = sigma_noise
-        self.pnl = 0
+        self.pnl = []
 
     def trade(self, bid, ask, true_value):
         ## the informed trader knows the true value
@@ -68,7 +68,7 @@ class noisy_informed_trader(trader):
 class perfectly_informed_trader(trader):
 
     def __init__(self):
-        self.pnl = 0
+        self.pnl = []
 
     def trade(self, bid, ask, true_value):
 
@@ -178,9 +178,7 @@ class Vi_prior():
         
         self.vec_v = vec_v
         if update_history:
-            self.v_history.append(vec_v)
-        print(self.sigma)
-        
+            self.v_history.append(vec_v)        
 
     def compute_prior_v(self, update_history:Optional[bool]=True):
         '''
@@ -236,16 +234,18 @@ class Vi_prior():
         '''
 
         assert Pb < Pa, "ask price is below bid price"
+        #assert np.abs(Pbuy+Psell+Pno-1)<1e-3, "prior proba or order is normalized"
 
         post = []
 
         if order_type == 1:
 
             for i, v in enumerate(self.vec_v):
-                if v <= Pa:
-                    post.append(self.prior_v[i]*((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w))))
-                else:
-                    post.append(self.prior_v[i]*(alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w)) + (1-alpha)*eta))
+            #     if v <= Pa:
+            #         post.append(self.prior_v[i]*((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w))))
+            #     else:
+            #         post.append(self.prior_v[i]*(alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w)) + (1-alpha)*eta))
+                post.append(self.prior_v[i]*((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w))))
 
             post = np.array(post)/Pbuy
 
@@ -253,27 +253,30 @@ class Vi_prior():
         elif order_type == -1:
 
             for i, v in enumerate(self.vec_v):
-                if v <= Pb:
-                    post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
-                else:
-                    post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
-            
+            #     if v <= Pb:
+            #         post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
+            #     else:
+            #         post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
+                post.append(self.prior_v[i]*((1-alpha)*eta + alpha*norm.cdf(x=Pb-v, scale=sigma_w)))
+
             post = np.array(post)/Psell
 
         else:
 
             for i, v in enumerate(self.vec_v):
-                if v < Pb:
-                    post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))))
-                elif (v>=Pb) and (v<Pa):
-                    post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w) + norm.cdf(x=Pa-v, scale=sigma_w))))
-                else:
-                    post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*norm.cdf(x=Pa-v, scale=sigma_w)))
+            #     if v < Pb:
+            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))))
+            #     elif (v>=Pb) and (v<Pa):
+            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w) + norm.cdf(x=Pa-v, scale=sigma_w))))
+            #     else:
+            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*norm.cdf(x=Pa-v, scale=sigma_w)))
+                post.append(self.prior_v[i]*((1-2*eta)*(1-alpha) + alpha*(norm.cdf(x=Pa-v, scale=sigma_w) - norm.cdf(x=Pb-v, scale=sigma_w))))
+
 
             post = np.array(post)/Pno
             
-        
-        assert np.abs(sum(post)-1)<1e-3, "proba distr is not normalized"
+
+
 
         if update_prior:
             self.prior_v = post
@@ -312,18 +315,26 @@ def P_sell(Pb, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list]
     else:
 
         #convert v into a df for usefulness
-        prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
+        #prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
 
         ## first sum when Vi < Pb
-        result = sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi < Pb])
+        #####result = sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi < Pb])
         
         ## second sum when Vi >= Pb
         #result += sum([(alpha*(1-norm.cdf(x=Vi-Pb, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi >= Pb])
-        result +=  sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi >= Pb])
+        #####result +=  sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi >= Pb])
 
-    assert (result>=0) and (result<=1), "P_sell is not between 0 and 1, problem"
+        result = (1-alpha)*eta
+        for i, v in enumerate(vec_v):
+            result += v_prior[i]*norm.cdf(x=Pb-v, scale=sigma_w)*alpha
+    
+   
+    #assert (result>=0-) and (result<=1), "P_sell is not between 0 and 1, problem"
 
     return result
+
+
+
 
 
 
@@ -390,17 +401,25 @@ def P_buy(Pa, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list],
     else:
 
         #convert v into a df for usefulness
-        prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
+        #prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
 
         ## first sum when Vi < Pa
         #result = sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa])
-        result = sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa])
+        #####result = sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa])
 
         ## second sum when Vi >= Pa
         #result += sum([(alpha*norm.cdf(x=Vi-Pa, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
-        result += sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
+        #####result += sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
+        result = (1-alpha)*eta
+        for i, v in enumerate(vec_v):
+            result += alpha*(1-norm.cdf(x=Pa-v,scale=sigma_w))*v_prior[i]
+        
 
-    assert (result>=0) and (result<=1), "P_sell is not between 0 and 1, problem"
+
+    if result <0-0.001 or result>1+0.001:
+        pass
+    #print(f"Pbuy: {result}")
+    #assert (result>=0) and (result<=1), "P_sell is not between 0 and 1, problem"
 
     return result
 
@@ -418,19 +437,25 @@ def P_no_order(Pb, Pa, alpha, eta, sigma_w, vec_v, v_prior):
 
     prob = (1-alpha)*(1-2*eta) ## part of uninformed traders
 
-    for i, v in enumerate(vec_v):
-        if v<= Pb:
-            prob += v_prior[i]*alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))
-        elif (v>Pb) and (v<=Pa):
-            prob += v_prior[i]*(alpha*(norm.cdf(x=Pa-v, scale=sigma_w) + (1-norm.cdf(x=Pb-v, scale=sigma_w))))
-        else:
-            prob += v_prior[i]*alpha*norm.cdf(x=Pa-v, scale=sigma_w)
+    # for i, v in enumerate(vec_v):
+    #     if v<= Pb:
+    #         prob += v_prior[i]*alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))
+    #     elif (v>Pb) and (v<=Pa):
+    #         prob += v_prior[i]*(alpha*(norm.cdf(x=Pa-v, scale=sigma_w) + (1-norm.cdf(x=Pb-v, scale=sigma_w))))
+    #     else:
+    #         prob += v_prior[i]*alpha*norm.cdf(x=Pa-v, scale=sigma_w)
 
     #if prob<0 or prob>1:
         #print(f"prob is not corrrect {prob}") 
     #assert (prob>=0) and (prob<=1), "prob is not between 0 and 1"
-    
-    
+
+    for i, v in enumerate(vec_v):
+
+        prob += v_prior[i]*alpha*(norm.cdf(x=Pa-v, scale=sigma_w) - norm.cdf(x=Pb-v, scale=sigma_w))
+
+    #assert (prob>=0) and (prob<=1), "prob is not between 0 and 1"
+
+
     return prob
 
 
@@ -478,28 +503,46 @@ def Pa_fp(Pa, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list],
 
 ## expectation of true value
 
-def expected_value(Pb, Pa, psell, pbuy, vec_v, v_prior, alpha, eta, sigma_w):
+def compute_exp_true_value(Pb, Pa, psell, pbuy, pno, vec_v, v_prior, alpha, eta, sigma_w):
 
-    res = 0
+    exp = Pa*psell + Pb*pbuy 
 
-    ## compute E[V | No order]
     for i, v in enumerate(vec_v):
-        if v<Pb:
-            res += v*v_prior[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w)))
-        elif (Pb<=v) and (v<Pa):
-            res += v*v_prior[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w) + norm.cdf(x=Pa-v, scale=sigma_w)))
-        else:
-            res += v*v_prior[i]*((1-alpha)*(1-2*eta) + alpha*norm.cdf(x=Pa-v, scale=sigma_w))
 
-    ## add buy order and sell order parts
-    res += Pb*psell + Pa*pbuy
+        exp += v*v_prior[i]*alpha*(norm.cdf(x=Pa-v, scale=sigma_w) - norm.cdf(x=Pb-v, scale=sigma_w))
     
-    return res
+    return exp
+
 
 
 
 
 class GMD_simluation():
+
+    '''This class allows to run a full simulation of a GMD model on an fake asset
+        - The asset price is a jump process
+        - there are 2 types of traders:
+            - uninformed traders
+            - noisy informed traders (perfectly informed if the sigma_noise is set to very small values)
+        - the market maker knows:
+            - the initial asset value
+            - the probabilstic nature of trading crowd
+            - the *occurence* of jumps in the true asset price
+
+       Params:
+            - tmax: duration of simulation
+            - sigma_price: std of jumps distribution (normal) (responsible with "multiplier" of simulation duration)
+            - proba_jump: probability of a jump at any iteration
+            - alpha: proportion of (noisy) informed traders
+            - eta: probability of a buy/sell order from an uninformed trader
+            - sigma_noise: std of noise distribution (normal) of noisy informed trader
+            - V0: initial true value
+            - multiplier: parameter setting the discretization qtty (responsible with "sigma_price" of simulation duration)
+                - default will lead to precision of cents 
+                - higher will leads to finer grid (longer simulation)
+            - eps_discrete_error: allowed discretization error
+        '''
+
 
     def __init__(self, 
                     tmax : int, 
@@ -509,7 +552,9 @@ class GMD_simluation():
                     eta : float, 
                     sigma_noise : float, 
                     V0 : Optional[float]=100,
-                    multiplier : Optional[int]=None):
+                    multiplier : Optional[int]=None, 
+                    eps_discrete_error:Optional[float]=1e-4):
+
         ## atttributes/params of simulation
         self.tmax = tmax
         self.alpha = alpha
@@ -519,6 +564,7 @@ class GMD_simluation():
         self.sigma_w = sigma_noise
         self.V0 = V0
         self.multiplier = multiplier
+        self.eps = eps_discrete_error
         self.run = False
 
         ## compute price dynamics
@@ -528,14 +574,14 @@ class GMD_simluation():
     def __str__(self):
 
         res = f"GMD simulation with following params: \n- {self.tmax} iterations\n"
-        res += f"- price with jump probability {self.proba_jump} and amplitude std {self.sigma_price}\n"
+        res += f"- price with jump probability {self.proba_jump} and amplitude std {self.sigma_price} (current path has {self.jumps.count(1)} jumps)\n"
         res += f"- proportion informed traders is {self.alpha}\n"
         res += f"- noise std of informed traders is {self.sigma_w}\n"
         res += f"- probability of random trade by uninformed traders is {self.eta}\n"
         if self.multiplier is None:
             res += f"- V(t=0)={self.V0}, multiplier is set to default"
         else:
-            res += f"- V(t=0)={self.V0}, multiplier is {self.multiplier} so prob density len is {int(self.multiplier*2*self.sigma_w*4)}"
+            res += f"- V(t=0)={self.V0}, multiplier is {self.multiplier} so prob density len is {int(self.multiplier*2*self.sigma_price*4)}"
         if not self.run:
             res += "\n       Not run yet       "
         else:
@@ -547,7 +593,8 @@ class GMD_simluation():
 
     def get_asset_dynamics(self):
         '''
-        This methods simulates one asset price path and saves it
+        This methods simulates one asset price path and saves it for when the 
+        a simulation is run
         '''
         
         val = asset_dynamics(p_jump=self.proba_jump, sigma=self.sigma_price, init_price=self.V0)
@@ -572,14 +619,17 @@ class GMD_simluation():
 
         self.asks = []
         self.bids = []
+        self.exp_value = []
 
         self.u_trader = uninformed_trader(trade_prob=self.eta)
         self.i_trader = noisy_informed_trader(sigma_noise=self.sigma_w)
 
+        self.traders_order = np.random.choice(["i", "u"], size=self.tmax, p=[self.alpha, 1-self.alpha])
+
         for t in tqdm([t for t in range(self.tmax)]):
 
             if self.jumps[t]==1:
-                self.v_distrib.reset()
+                self.v_distrib.reset(centered_at=self.exp_value[-1])
             
             ## MM sets bid and ask price
             self.asks.append(fixed_point(Pa_fp, self.true_value[t], args=(self.alpha, self.eta, self.sigma_w, self.v_distrib.vec_v, self.v_distrib.prior_v), xtol=1e-2, maxiter=500, method='del2').item())
@@ -587,22 +637,37 @@ class GMD_simluation():
 
             ## priors or buying, selling, no order
             Pbuy = P_buy(Pa=self.asks[-1], alpha=self.alpha, eta=self.eta, sigma_w=self.sigma_w, vec_v=self.v_distrib.vec_v, v_prior=self.v_distrib.prior_v)
+            assert Pbuy>0-self.eps and Pbuy<1+self.eps, "Pbuy not between 0 and 1"
+            
             Psell = P_sell(Pb=self.bids[-1], alpha=self.alpha, eta = self.eta, sigma_w=self.sigma_w, vec_v=self.v_distrib.vec_v, v_prior=self.v_distrib.prior_v)
+            assert Psell>0-self.eps and Psell<1+self.eps, "Psell not between 0 and 1"
+            
             Pnoorder = P_no_order(Pb=self.bids[-1], Pa=self.asks[-1], alpha=self.alpha, eta=self.eta, sigma_w=self.sigma_w, vec_v=self.v_distrib.vec_v, v_prior=self.v_distrib.prior_v)
+            assert Pnoorder>0-self.eps and Pnoorder<1+self.eps, "P_noorder not between 0 and 1"
 
-            #sum of priors
-            print(f"SUM OF PRIORS {Pbuy} + {Psell} + {Pnoorder} = {Pbuy + Psell + Pnoorder}")
+            assert Psell+Pbuy+Pnoorder>0-self.eps and Pbuy +Psell+Pnoorder<1+self.eps, "sum of order priors not between 0 and 1"
 
             ## compute expected value
-            # ...
+            self.exp_value.append(compute_exp_true_value(Pb=self.bids[-1], 
+                                                    Pa=self.asks[-1],
+                                                    psell=Psell, 
+                                                    pbuy=Pbuy,
+                                                    pno=Pnoorder,
+                                                    vec_v=self.v_distrib.vec_v,
+                                                    v_prior=self.v_distrib.prior_v,
+                                                    alpha=self.alpha,
+                                                    eta=self.eta,
+                                                    sigma_w=self.sigma_w))
 
             ## tarders trade
-            which = np.random.choice(["i", "u"], p=[self.alpha, 1-self.alpha])
-            if which == "i":
+            if self.traders_order[t] == "i":
                 trade = self.i_trader.trade(bid=self.bids[-1], ask=self.asks[-1], true_value=self.true_value[t])
+                self.u_trader.update_pnl(0, 45, 45)
                 ## the noise is added to the true value for the noisy informed trader to trade
             else:
                 trade = self.u_trader.trade()
+                self.i_trader.update_pnl(0, 45, 45)
+
 
             ## update MM proba distribution
             self.v_distrib.compute_posterior(trade, 
@@ -616,36 +681,59 @@ class GMD_simluation():
                                             sigma_w=self.sigma_w,
                                             update_prior=True)
 
-        
+            assert np.abs(sum(self.v_distrib.prior_v)-1) < self.eps, "posterior prob is not normalized"
+
+        self.run = True
         print("Simulation finsihed")
 
 
 
     def show_result(self):
+        '''
+        This methods shows plots of:
+            - the true value and the expected value over time
+            - bid/ask prices over time
+            - spread over time
+            - MM true value distribution at 3 different iterations
+        '''
+
 
         fig, ax = plt.subplots(2,2, figsize=(10,8))
-        #ax[0,0].plot([self.true_value[i] + val.nit_noise[i] for i in range(tmax)], label="noisy true value")
-        ax[0,0].plot(self.true_value, label="true_val")
-        ax[0,0].set_ylabel("asset value")
-        #ax[0,0].plot([t for t in range(tmax)], [e_v_s[i] for i in range(tmax)], label="expected value")
+
+        bids=np.array(self.bids)
+        asks=np.array(self.asks)
+        
 
         ax[0, 1].plot(self.bids, label="bid price")
         ax[0, 1].plot(self.asks, label="ask price")
         ax[0,1].legend()
+        ax[0,1].set_xlabel("time t")
 
-        ax[1,0].plot(np.array(self.asks)-np.array(self.bids), label="spread")
+        ax[0,0].plot(self.true_value, label="True value")
+        ax[0,0].set_ylabel("asset value")
+        ax[0,0].plot(self.exp_value, label="Exp. value")
+        ax[0,0].legend()
+        ax[0,0].set_ylim(ax[0,1].get_ylim())
+        ax[0,0].set_xlabel("time t")
+
+        ax[1,0].plot((asks-bids)/(0.5*(asks+bids)), label="spread")
         ax[1,0].set_xlabel("time t")
         ax[0,1].set_ylabel("bid/ask")
         ax[1,0].set_ylabel("spread")
 
-
-        ax[1,1].plot(self.v_distrib.v_history[50], self.v_distrib.p_history[50], label="iter: 78")
-        ax[1,1].plot(self.v_distrib.v_history[200], self.v_distrib.p_history[200], label="iter: 85")
-        #ax[1,1].plot(vec_v, prior_vs[100], label="iter: 100")
+        #snapshots_i = (int(self.tmax/3), int(2*self.tmax/3), int(3*self.tmax/3-2))
+        snapshots_i = [3,6,9]
+        for snap in snapshots_i:
+            ax[1,1].plot(self.v_distrib.v_history[snap], self.v_distrib.p_history[snap], label=f"iter: {snap}")
         ax[1,1].legend()
-        plt.legend()
-        plt.show()
+        ax[1,1].set_xlabel("true values")
+        ax[1,1].set_ylabel("count (normalized)")
 
+        #ax[2,1].plot(self.i_trader.pnl)
+        #ax[1,2].plot(self.i_trader.pnl)
+        fig.tight_layout()
+
+        plt.show()
 
 
 
