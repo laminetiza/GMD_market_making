@@ -234,17 +234,12 @@ class Vi_prior():
         '''
 
         assert Pb < Pa, "ask price is below bid price"
-        #assert np.abs(Pbuy+Psell+Pno-1)<1e-3, "prior proba or order is normalized"
 
         post = []
 
         if order_type == 1:
 
             for i, v in enumerate(self.vec_v):
-            #     if v <= Pa:
-            #         post.append(self.prior_v[i]*((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w))))
-            #     else:
-            #         post.append(self.prior_v[i]*(alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w)) + (1-alpha)*eta))
                 post.append(self.prior_v[i]*((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-v, scale=sigma_w))))
 
             post = np.array(post)/Pbuy
@@ -253,10 +248,6 @@ class Vi_prior():
         elif order_type == -1:
 
             for i, v in enumerate(self.vec_v):
-            #     if v <= Pb:
-            #         post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
-            #     else:
-            #         post.append(self.prior_v[i]*(alpha*norm.cdf(x=Pb-v, scale=sigma_w) + (1-alpha)*eta))
                 post.append(self.prior_v[i]*((1-alpha)*eta + alpha*norm.cdf(x=Pb-v, scale=sigma_w)))
 
             post = np.array(post)/Psell
@@ -264,20 +255,10 @@ class Vi_prior():
         else:
 
             for i, v in enumerate(self.vec_v):
-            #     if v < Pb:
-            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))))
-            #     elif (v>=Pb) and (v<Pa):
-            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w) + norm.cdf(x=Pa-v, scale=sigma_w))))
-            #     else:
-            #         post.append(self.prior_v[i]*((1-alpha)*(1-2*eta) + alpha*norm.cdf(x=Pa-v, scale=sigma_w)))
                 post.append(self.prior_v[i]*((1-2*eta)*(1-alpha) + alpha*(norm.cdf(x=Pa-v, scale=sigma_w) - norm.cdf(x=Pb-v, scale=sigma_w))))
-
 
             post = np.array(post)/Pno
             
-
-
-
         if update_prior:
             self.prior_v = post
             self.p_history.append(post)
@@ -314,23 +295,10 @@ def P_sell(Pb, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list]
 
     else:
 
-        #convert v into a df for usefulness
-        #prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
-
-        ## first sum when Vi < Pb
-        #####result = sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi < Pb])
-        
-        ## second sum when Vi >= Pb
-        #result += sum([(alpha*(1-norm.cdf(x=Vi-Pb, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi >= Pb])
-        #####result +=  sum([(alpha*norm.cdf(x=Pb-Vi, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi >= Pb])
-
         result = (1-alpha)*eta
         for i, v in enumerate(vec_v):
             result += v_prior[i]*norm.cdf(x=Pb-v, scale=sigma_w)*alpha
     
-   
-    #assert (result>=0-) and (result<=1), "P_sell is not between 0 and 1, problem"
-
     return result
 
 
@@ -369,7 +337,6 @@ def Pb_fp(Pb, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list],
 
         result = sum([((1-alpha)*eta + alpha*norm.cdf(x=Pb-Vi, scale=sigma_w))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pb])
 
-        #result += sum([((1-alpha)*eta + alpha*(1-norm.cdf(x=Vi-Pb, scale=sigma_w)))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pb])
         result += sum([((1-alpha)*eta + alpha*norm.cdf(x=Pb-Vi, scale=sigma_w))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pb])
 
     return result/psell
@@ -400,26 +367,10 @@ def P_buy(Pa, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list],
 
     else:
 
-        #convert v into a df for usefulness
-        #prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
-
-        ## first sum when Vi < Pa
-        #result = sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa])
-        #####result = sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa])
-
-        ## second sum when Vi >= Pa
-        #result += sum([(alpha*norm.cdf(x=Vi-Pa, scale=sigma_w) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
-        #####result += sum([(alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)) + (1-alpha)*eta)*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
         result = (1-alpha)*eta
         for i, v in enumerate(vec_v):
             result += alpha*(1-norm.cdf(x=Pa-v,scale=sigma_w))*v_prior[i]
-        
 
-
-    if result <0-0.001 or result>1+0.001:
-        pass
-    #print(f"Pbuy: {result}")
-    #assert (result>=0) and (result<=1), "P_sell is not between 0 and 1, problem"
 
     return result
 
@@ -437,24 +388,9 @@ def P_no_order(Pb, Pa, alpha, eta, sigma_w, vec_v, v_prior):
 
     prob = (1-alpha)*(1-2*eta) ## part of uninformed traders
 
-    # for i, v in enumerate(vec_v):
-    #     if v<= Pb:
-    #         prob += v_prior[i]*alpha*(1-norm.cdf(x=Pb-v, scale=sigma_w))
-    #     elif (v>Pb) and (v<=Pa):
-    #         prob += v_prior[i]*(alpha*(norm.cdf(x=Pa-v, scale=sigma_w) + (1-norm.cdf(x=Pb-v, scale=sigma_w))))
-    #     else:
-    #         prob += v_prior[i]*alpha*norm.cdf(x=Pa-v, scale=sigma_w)
-
-    #if prob<0 or prob>1:
-        #print(f"prob is not corrrect {prob}") 
-    #assert (prob>=0) and (prob<=1), "prob is not between 0 and 1"
-
     for i, v in enumerate(vec_v):
 
         prob += v_prior[i]*alpha*(norm.cdf(x=Pa-v, scale=sigma_w) - norm.cdf(x=Pb-v, scale=sigma_w))
-
-    #assert (prob>=0) and (prob<=1), "prob is not between 0 and 1"
-
 
     return prob
 
@@ -490,10 +426,8 @@ def Pa_fp(Pa, alpha, eta, sigma_w, vec_v:Optional[list], v_prior:Optional[list],
         #convert v into a df for usefulness
         prior_on_v = pd.DataFrame(data=[vec_v, v_prior]).T.rename(columns={0:"v", 1:"p"})
 
-        #result = sum([((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa]) 
         result = sum([((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi <= Pa]) 
 
-        #result += sum([((1-alpha)*eta + alpha*norm.cdf(x=Vi-Pa, scale=sigma_w))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
         result += sum([((1-alpha)*eta + alpha*(1-norm.cdf(x=Pa-Vi, scale=sigma_w)))*Vi*(prior_on_v[prior_on_v["v"]==Vi]["p"].item()) for Vi in vec_v if Vi > Pa])
                 
     return result/pbuy
