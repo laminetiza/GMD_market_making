@@ -1,5 +1,5 @@
 # GMD_market_making
-This repo is implements the Glosten-Milgrom-Das market making model. 
+This repo implements the Glosten-Milgrom-Das market making model.
 
 It mainly follows Das's paper (https://cs.gmu.edu/~sanmay/papers/das-qf-rev3.pdf) which constructs an approximate solution to the problem.
 
