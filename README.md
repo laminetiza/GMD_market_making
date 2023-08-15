@@ -32,7 +32,7 @@ The market maker initially has a gaussian prior centered at the initial value (h
     * the proportion of noisy and informed traders
     * the probabilities of buy/sell orders by noisy traders
 * He will hence have a function to update the posterior probability once he knows which trade was passed ( he does not know which trader traded, only the proportions of them, so the probability of each being selected)
-* the posterior is then the prior for the next iteration and allows the MM effectively track the true value
+* the posterior is then the prior for the next iteration and allows the MM to effectively track the true value
 
 ---
 
